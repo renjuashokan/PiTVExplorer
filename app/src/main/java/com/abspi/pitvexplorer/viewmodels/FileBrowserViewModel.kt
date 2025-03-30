@@ -1,6 +1,7 @@
 package com.abspi.pitvexplorer.viewmodels
 
 import android.net.Uri
+import android.util.Log
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
@@ -133,7 +134,29 @@ class FileBrowserViewModel(private val serverIp: String) : ViewModel() {
         }
     }
 
+    fun getFileFullPath(fileName: String): String {
+        val currentPath = _currentPath.value ?: "."
+        return if (currentPath == "." || currentPath == "\$") {
+            fileName
+        } else {
+            "$currentPath/$fileName"
+        }
+    }
+
+
+    fun debugPaths() {
+        Log.d("PathDebug", "Current path value: ${_currentPath.value}")
+        Log.d("PathDebug", "Path segments: ${_pathSegments.value}")
+
+        // Check if current path matches what's displayed in the UI
+        val segmentsWithoutRoot = _pathSegments.value?.filterIndexed { index, _ -> index > 0 } ?: listOf()
+        val pathFromSegments = segmentsWithoutRoot.joinToString("/")
+        Log.d("PathDebug", "Path from segments: $pathFromSegments")
+    }
+
     fun navigateToDirectory(dirName: String) {
+        Log.d("PathDebug", "Navigating to directory: $dirName")
+        Log.d("PathDebug", "Current path before: ${_currentPath.value}")
         val path = _currentPath.value ?: "."
         val newPath = if (path == "." || path == "\$") {
             dirName
@@ -143,6 +166,8 @@ class FileBrowserViewModel(private val serverIp: String) : ViewModel() {
         _currentPath.value = normalizeServerPath(newPath)
         updatePathSegments()
         fetchFiles(reset = true)
+        debugPaths()
+        Log.d("PathDebug", "Current path after: ${_currentPath.value}")
     }
 
     fun navigateUp() {
@@ -304,13 +329,11 @@ class FileBrowserViewModel(private val serverIp: String) : ViewModel() {
                 lower.endsWith(".mkv")
     }
 
+
     fun getThumbnailUrl(file: FileItem): String {
-        val path = if (_currentPath.value == "." || _currentPath.value == "\$") {
-            file.fullName
-        } else {
-            "${_currentPath.value}/${file.fullName}"
-        }
-        val normalizedPath = normalizeServerPath(path)
+        // Get the full path by combining current path with file name
+        val fullPath = getFileFullPath(file.name)
+        val normalizedPath = normalizeServerPath(fullPath)
         val baseUrl = "http://$serverIp:8080/api/v1"
 
         return if (isVideo(file.name)) {

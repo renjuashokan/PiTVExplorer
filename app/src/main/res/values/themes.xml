@@ -11,6 +11,15 @@
         <item name="searchOrbViewStyle">@style/CustomSearchOrbView</item>
     </style>
     
+    <!-- Fullscreen theme for the VideoPlayerActivity -->
+    <style name="Theme.PiTVExplorer.Fullscreen" parent="Theme.PiTVExplorer">
+        <item name="android:windowFullscreen">true</item>
+        <item name="android:windowBackground">@android:color/black</item>
+        <item name="android:windowContentOverlay">@null</item>
+        <item name="android:windowActionBar">false</item>
+        <item name="android:windowNoTitle">true</item>
+    </style>
+    
     <!-- Custom search orb style with your pi_view_red color -->
     <style name="CustomSearchOrbView" parent="Widget.Leanback.SearchOrbViewStyle">
         <item name="searchOrbColor">@color/pi_view_red</item>

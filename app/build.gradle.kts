@@ -42,6 +42,10 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
      implementation ("androidx.constraintlayout:constraintlayout:2.2.1")
     implementation ("androidx.cardview:cardview:1.0.0")
+    // ExoPlayer dependencies
+    implementation ("com.google.android.exoplayer:exoplayer-core:2.18.2")
+    implementation ("com.google.android.exoplayer:exoplayer-ui:2.18.2")
+    implementation ("com.google.android.exoplayer:exoplayer-hls:2.18.2")
 
     implementation ("androidx.recyclerview:recyclerview:1.4.0")
     implementation ("androidx.recyclerview:recyclerview-selection:1.1.0")

@@ -1,5 +1,6 @@
 package com.abspi.pitvexplorer.views.activities
 
+import android.content.Intent
 import android.os.Bundle
 import android.view.KeyEvent
 import android.view.View
@@ -11,10 +12,12 @@ import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.abspi.pitvexplorer.adapters.FileItemAdapter
 import com.abspi.pitvexplorer.models.FileItem
+import com.abspi.pitvexplorer.models.MediaItem
 import com.abspi.pitvexplorer.utils.PreferenceManager
 import com.abspi.pitvexplorer.viewmodels.FileBrowserViewModel
 import com.abspi.pitvexplorer.viewmodels.FileBrowserViewModelFactory
 import com.abspi.pitvexplorer.R
+import java.util.ArrayList
 
 class FileBrowserActivity : FragmentActivity() {
 
@@ -25,13 +28,14 @@ class FileBrowserActivity : FragmentActivity() {
     private lateinit var loadingIndicator: View
     private lateinit var errorMessage: TextView
     private lateinit var fileAdapter: FileItemAdapter
+    private lateinit var serverIp: String
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_file_browser)
 
         // Get server IP from intent
-        val serverIp = intent.getStringExtra("SERVER_IP") ?: run {
+        serverIp = intent.getStringExtra("SERVER_IP") ?: run {
             Toast.makeText(this, "Server IP not provided", Toast.LENGTH_SHORT).show()
             finish()
             return
@@ -59,19 +63,20 @@ class FileBrowserActivity : FragmentActivity() {
     }
 
     private fun setupRecyclerView() {
-        fileAdapter = FileItemAdapter(emptyList(), object : FileItemAdapter.FileItemClickListener {
-            override fun onFileItemClick(fileItem: FileItem) {
-                if (fileItem.isDirectory) {
-                    viewModel.navigateToDirectory(fileItem.fullName)
-                } else {
-                    if (viewModel.isVideo(fileItem.fullName)) {
-                        openVideoPlayer(fileItem)
-                    } else if (viewModel.isPicture(fileItem.fullName)) {
-                        openImageViewer(fileItem)
-                    }
+        fileAdapter = FileItemAdapter(emptyList(),viewModel, object : FileItemAdapter.FileItemClickListener {
+        override fun onFileItemClick(fileItem: FileItem) {
+            if (fileItem.isDirectory) {
+                // Use file.name instead of file.fullName for directory navigation
+                viewModel.navigateToDirectory(fileItem.name)
+            } else {
+                if (viewModel.isVideo(fileItem.name)) {
+                    openVideoPlayer(fileItem)
+                } else if (viewModel.isPicture(fileItem.name)) {
+                    openImageViewer(fileItem)
                 }
             }
-        })
+        }
+    })
 
         recyclerView.apply {
             layoutManager = GridLayoutManager(this@FileBrowserActivity, 4)
@@ -126,9 +131,29 @@ class FileBrowserActivity : FragmentActivity() {
         val currentIndex = videoFiles.indexOf(fileItem)
 
         if (currentIndex >= 0) {
+            // Create MediaItem list for the playlist
+            val mediaItems = ArrayList<MediaItem>()
+            videoFiles.forEach { file ->
+                val path = getCurrentFullPath(file.fullName)
+                mediaItems.add(MediaItem(name = file.fullName, path = path))
+            }
+
             // Launch video player activity
-            // TODO: Implement VideoPlayerActivity
-            Toast.makeText(this, "Playing video: ${fileItem.name}", Toast.LENGTH_SHORT).show()
+            val intent = Intent(this, VideoPlayerActivity::class.java).apply {
+                putExtra("SERVER_ADDRESS", serverIp)
+                putExtra("PLAYLIST", mediaItems)
+                putExtra("INITIAL_INDEX", currentIndex)
+            }
+            startActivity(intent)
+        }
+    }
+
+    private fun getCurrentFullPath(fileName: String): String {
+        val currentPath = viewModel.currentPath.value ?: "."
+        return if (currentPath == "." || currentPath == "\$") {
+            fileName
+        } else {
+            "$currentPath/$fileName"
         }
     }
 
@@ -138,7 +163,6 @@ class FileBrowserActivity : FragmentActivity() {
         val currentIndex = imageFiles.indexOf(fileItem)
 
         if (currentIndex >= 0) {
-            // Launch image viewer activity
             // TODO: Implement ImageViewerActivity
             Toast.makeText(this, "Viewing image: ${fileItem.name}", Toast.LENGTH_SHORT).show()
         }

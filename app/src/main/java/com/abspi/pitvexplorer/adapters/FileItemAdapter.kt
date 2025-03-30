@@ -10,12 +10,14 @@ import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 import com.abspi.pitvexplorer.R
 import com.abspi.pitvexplorer.models.FileItem
+import com.abspi.pitvexplorer.viewmodels.FileBrowserViewModel
 import com.bumptech.glide.Glide
 import java.text.SimpleDateFormat
 import java.util.Locale
 
 class FileItemAdapter(
     private var fileItems: List<FileItem>,
+    private val viewModel: FileBrowserViewModel,
     private val listener: FileItemClickListener
 ) : RecyclerView.Adapter<FileItemAdapter.FileViewHolder>() {
 
@@ -121,22 +123,8 @@ class FileItemAdapter(
         }
 
         // In FileItemAdapter.kt
-private fun getThumbnailUrl(fileItem: FileItem): String {
-    // Get server IP from context (add this to your activity constructor)
-    val context = itemView.context
-    val prefs = context.getSharedPreferences("PiTVExplorerPrefs", Context.MODE_PRIVATE)
-    val serverIp = prefs.getString("server_ip", "localhost") ?: "localhost"
-    
-    val baseUrl = "http://$serverIp:8080/api/v1"
-    val path = fileItem.fullName
-
-    return if (isVideo(fileItem.name)) {
-        "$baseUrl/thumbnail/${Uri.encode(path)}"
-    } else if (isPicture(fileItem.name)) {
-        "$baseUrl/file/${Uri.encode(path)}"
-    } else {
-        ""
-    }
-}
+    private fun getThumbnailUrl(fileItem: FileItem): String {
+                return viewModel.getThumbnailUrl(fileItem)
+        }
     }
 }
