@@ -40,20 +40,21 @@ dependencies {
     implementation(libs.glide)
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.7")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
-     implementation ("androidx.constraintlayout:constraintlayout:2.2.1")
-    implementation ("androidx.cardview:cardview:1.0.0")
+    implementation("androidx.constraintlayout:constraintlayout:2.2.1")
+    implementation("androidx.cardview:cardview:1.0.0")
+    implementation("androidx.recyclerview:recyclerview:1.4.0")
+    implementation("androidx.recyclerview:recyclerview-selection:1.1.0")
+    implementation(libs.androidx.appcompat)
+    annotationProcessor("com.github.bumptech.glide:compiler:4.16.0")
+
     // ExoPlayer dependencies
-    implementation ("com.google.android.exoplayer:exoplayer-core:2.18.2")
-    implementation ("com.google.android.exoplayer:exoplayer-ui:2.18.2")
-    implementation ("com.google.android.exoplayer:exoplayer-hls:2.18.2")
+    implementation("com.google.android.exoplayer:exoplayer-core:2.18.2")
+    implementation("com.google.android.exoplayer:exoplayer-ui:2.18.2")
+    implementation("com.google.android.exoplayer:exoplayer-hls:2.18.2")
 
-    implementation ("androidx.recyclerview:recyclerview:1.4.0")
-    implementation ("androidx.recyclerview:recyclerview-selection:1.1.0")
-    //implementation ("com.github.bumptech.glide:glide:4.16.0") // For image loading
-    annotationProcessor ("com.github.bumptech.glide:compiler:4.16.0")
+    // PhotoView for zooming capabilities
+    implementation("com.github.chrisbanes:PhotoView:2.3.0")
 
-    // Make sure you have these dependencies too
-    implementation ("androidx.constraintlayout:constraintlayout:2.1.4")
-    implementation ("androidx.cardview:cardview:1.0.0")
-    implementation ("androidx.leanback:leanback:1.0.0")
+    // ViewPager2 for swiping between images
+    implementation("androidx.viewpager2:viewpager2:1.1.0")
 }

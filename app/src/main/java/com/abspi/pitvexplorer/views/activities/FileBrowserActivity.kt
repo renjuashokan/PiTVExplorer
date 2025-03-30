@@ -12,6 +12,7 @@ import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.abspi.pitvexplorer.adapters.FileItemAdapter
 import com.abspi.pitvexplorer.models.FileItem
+import com.abspi.pitvexplorer.models.ImageItem
 import com.abspi.pitvexplorer.models.MediaItem
 import com.abspi.pitvexplorer.utils.PreferenceManager
 import com.abspi.pitvexplorer.viewmodels.FileBrowserViewModel
@@ -163,8 +164,22 @@ class FileBrowserActivity : FragmentActivity() {
         val currentIndex = imageFiles.indexOf(fileItem)
 
         if (currentIndex >= 0) {
-            // TODO: Implement ImageViewerActivity
-            Toast.makeText(this, "Viewing image: ${fileItem.name}", Toast.LENGTH_SHORT).show()
+            // Create ImageItem list for the gallery
+            val imageItems = ArrayList<ImageItem>()
+            imageFiles.forEach { file ->
+                val fullPath = viewModel.getFileFullPath(file.fullName)
+                val normalizedPath = viewModel.normalizeServerPath(fullPath)
+                val imageUrl = "http://$serverIp:8080/api/v1/file/${normalizedPath}"
+                imageItems.add(ImageItem(name = file.fullName, path = imageUrl))
+            }
+
+            // Launch image viewer activity
+            val intent = Intent(this, ImageViewerActivity::class.java).apply {
+                putExtra("SERVER_ADDRESS", serverIp)
+                putExtra("IMAGES", imageItems)
+                putExtra("INITIAL_INDEX", currentIndex)
+            }
+            startActivity(intent)
         }
     }
 
