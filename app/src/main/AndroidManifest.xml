@@ -51,6 +51,18 @@
             android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|smallestScreenSize|uiMode"
             android:screenOrientation="landscape"
             android:theme="@style/Theme.PiTVExplorer.Fullscreen" />
+
+        <activity
+    android:name=".views.activities.ImageViewerActivity"
+    android:label="@string/image_viewer"
+    android:theme="@style/Theme.AppCompat.NoActionBar"
+    android:exported="false" />
+
+<activity
+    android:name=".views.activities.TileGalleryActivity"
+    android:label="@string/image_gallery"
+    android:theme="@style/Theme.AppCompat"
+    android:exported="false" />
     </application>
 
 </manifest>

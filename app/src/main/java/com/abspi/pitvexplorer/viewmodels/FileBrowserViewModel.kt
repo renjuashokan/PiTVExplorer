@@ -290,7 +290,7 @@ class FileBrowserViewModel(private val serverIp: String) : ViewModel() {
         }
     }
 
-    private fun normalizeServerPath(path: String): String {
+    fun normalizeServerPath(path: String): String {
         // Convert $ to . for server requests
         if (path == "\$") return "."
 
@@ -317,14 +317,14 @@ class FileBrowserViewModel(private val serverIp: String) : ViewModel() {
     }
 
     fun isPicture(filename: String): Boolean {
-        val lower = filename.toLowerCase(Locale.ROOT)
+        val lower = filename.lowercase(Locale.ROOT)
         return lower.endsWith(".jpeg") || lower.endsWith(".jpg") ||
                 lower.endsWith(".png") || lower.endsWith(".gif") ||
                 lower.endsWith(".bmp") || lower.endsWith(".webp")
     }
 
     fun isVideo(filename: String): Boolean {
-        val lower = filename.toLowerCase(Locale.ROOT)
+        val lower = filename.lowercase(Locale.ROOT)
         return lower.endsWith(".mp4") || lower.endsWith(".avi") ||
                 lower.endsWith(".mkv")
     }

@@ -20,4 +20,13 @@
     <string name="error_connection_failed">Connection failed. Please check the server IP and try
         again.</string>
 
+    <!-- Image Viewer -->
+    <string name="image_count_format">%1$d of %2$d</string>
+    <string name="tile_view">Tile View</string>
+    <string name="slideshow_button">Slideshow</string>
+    <string name="image_thumbnail">Image thumbnail</string>
+    <string name="image_viewer">Image Viewer</string>
+    <string name="image_gallery">Image Gallery</string>
+    <string name="error_loading_image">Error loading image</string>
+
 </resources>

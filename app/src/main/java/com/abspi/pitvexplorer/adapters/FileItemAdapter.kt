@@ -110,19 +110,13 @@ class FileItemAdapter(
         }
 
         private fun isPicture(filename: String): Boolean {
-            val lower = filename.toLowerCase(Locale.ROOT)
-            return lower.endsWith(".jpeg") || lower.endsWith(".jpg") ||
-                    lower.endsWith(".png") || lower.endsWith(".gif") ||
-                    lower.endsWith(".bmp") || lower.endsWith(".webp")
+            return viewModel.isPicture(filename)
         }
 
         private fun isVideo(filename: String): Boolean {
-            val lower = filename.toLowerCase(Locale.ROOT)
-            return lower.endsWith(".mp4") || lower.endsWith(".avi") ||
-                    lower.endsWith(".mkv")
+            return viewModel.isVideo(filename)
         }
 
-        // In FileItemAdapter.kt
     private fun getThumbnailUrl(fileItem: FileItem): String {
                 return viewModel.getThumbnailUrl(fileItem)
         }
