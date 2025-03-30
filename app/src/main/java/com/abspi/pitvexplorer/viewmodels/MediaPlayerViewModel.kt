@@ -57,6 +57,14 @@ class MediaPlayerViewModel(private val serverAddress: String) : ViewModel() {
         }
     }
 
+    fun playVideoAt(position: Int) {
+        if (position >= 0 && position < (_playlist.value?.size ?: 0)) {
+            _currentIndex.value = position
+            updateCurrentMedia()
+            prepareStream()
+        }
+    }
+
     private fun updateCurrentMedia() {
         val index = _currentIndex.value ?: 0
         val list = _playlist.value ?: emptyList()

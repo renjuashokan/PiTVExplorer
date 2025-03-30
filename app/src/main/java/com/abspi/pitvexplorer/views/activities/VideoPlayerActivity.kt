@@ -4,14 +4,19 @@ import android.app.AlertDialog
 import android.content.pm.ActivityInfo
 import android.net.Uri
 import android.os.Bundle
+import android.util.Log
 import android.view.KeyEvent
 import android.view.View
 import android.widget.EditText
 import android.widget.TextView
 import android.widget.Toast
+import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.ViewModelProvider
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import com.abspi.pitvexplorer.R
+import com.abspi.pitvexplorer.adapters.VideoListAdapter
 import com.abspi.pitvexplorer.models.MediaItem
 import com.abspi.pitvexplorer.viewmodels.MediaPlayerViewModel
 import com.abspi.pitvexplorer.viewmodels.MediaPlayerViewModelFactory
@@ -27,8 +32,12 @@ class VideoPlayerActivity : FragmentActivity() {
     private lateinit var playerView: PlayerView
     private lateinit var loadingIndicator: View
     private lateinit var errorMessage: TextView
+    private lateinit var videoListOverlay: ConstraintLayout
+    private lateinit var videosRecyclerView: RecyclerView
+    private lateinit var videoAdapter: VideoListAdapter
     private var player: ExoPlayer? = null
     private var skipDuration: Int = 15 // Default skip duration in seconds
+    private var isOverlayVisible = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -54,17 +63,39 @@ class VideoPlayerActivity : FragmentActivity() {
         playerView = findViewById(R.id.playerView)
         loadingIndicator = findViewById(R.id.loadingIndicator)
         errorMessage = findViewById(R.id.errorMessage)
+        videoListOverlay = findViewById(R.id.videoListOverlay)
+        videosRecyclerView = findViewById(R.id.videosRecyclerView)
 
         // Set up ViewModel
         val factory = MediaPlayerViewModelFactory(serverAddress)
         viewModel = ViewModelProvider(this, factory)[MediaPlayerViewModel::class.java]
         viewModel.setPlaylist(playlist, initialIndex)
 
+        // Set up video list
+        setupVideoList(serverAddress, playlist, initialIndex)
+
         // Set up observers
         setupObservers()
 
         // Set up player
         initializePlayer()
+
+        // Request focus for player view
+        playerView.requestFocus()
+    }
+
+    private fun setupVideoList(serverAddress: String, playlist: List<MediaItem>, initialIndex: Int) {
+        // Initialize the RecyclerView for videos
+        videosRecyclerView.layoutManager =
+            LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false)
+
+        videoAdapter = VideoListAdapter(playlist, serverAddress, initialIndex) { position ->
+            // Handle video selection
+            viewModel.playVideoAt(position)
+            hideOverlay()
+        }
+
+        videosRecyclerView.adapter = videoAdapter
     }
 
     private fun setupObservers() {
@@ -75,6 +106,10 @@ class VideoPlayerActivity : FragmentActivity() {
                 player.prepare()
                 player.playWhenReady = true
             }
+
+            // Update selected item in the video list
+            val currentIndex = viewModel.currentIndex.value ?: 0
+            videoAdapter.updateData(viewModel.playlist.value ?: emptyList(), currentIndex)
         }
 
         // Observe loading state
@@ -98,7 +133,7 @@ class VideoPlayerActivity : FragmentActivity() {
             .build()
             .also { exoPlayer ->
                 playerView.player = exoPlayer
-                
+
                 // Set up player listener
                 exoPlayer.addListener(object : Player.Listener {
                     override fun onPlaybackStateChanged(state: Int) {
@@ -110,7 +145,7 @@ class VideoPlayerActivity : FragmentActivity() {
                         }
                     }
                 })
-                
+
                 // Set initial media if available
                 viewModel.streamUrl?.let { url ->
                     exoPlayer.setMediaItem(ExoMediaItem.fromUri(Uri.parse(url)))
@@ -119,23 +154,75 @@ class VideoPlayerActivity : FragmentActivity() {
                 }
             }
     }
-    
+
     private fun skipForward() {
         player?.let {
             val newPosition = it.currentPosition + (skipDuration * 1000)
             it.seekTo(newPosition)
         }
     }
-    
+
     private fun skipBackward() {
         player?.let {
             val newPosition = it.currentPosition - (skipDuration * 1000)
             it.seekTo(Math.max(0, newPosition))
         }
     }
-    
+
+    private fun toggleOverlay() {
+        if (isOverlayVisible) {
+            hideOverlay()
+        } else {
+            showOverlay()
+        }
+    }
+
+    private fun showOverlay() {
+        Log.d("VideoPlayer", "Showing overlay")
+        videoListOverlay.visibility = View.VISIBLE
+        isOverlayVisible = true
+        player?.playWhenReady = false // Pause video when overlay is shown
+
+        // Ensure the current video is visible in the list
+        val currentIndex = viewModel.currentIndex.value ?: 0
+        videosRecyclerView.scrollToPosition(currentIndex)
+
+        // Request focus on the current item after a brief delay
+        videosRecyclerView.postDelayed({
+            val viewHolder = videosRecyclerView.findViewHolderForAdapterPosition(currentIndex)
+            viewHolder?.itemView?.requestFocus()
+        }, 100)
+    }
+
+    private fun hideOverlay() {
+        Log.d("VideoPlayer", "Hiding overlay")
+        videoListOverlay.visibility = View.GONE
+        isOverlayVisible = false
+        player?.playWhenReady = true // Resume video when overlay is hidden
+        playerView.requestFocus()
+    }
+
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+        Log.d("VideoPlayer", "Key pressed: $keyCode")
+
+        // If overlay is visible, handle its navigation first
+        if (isOverlayVisible) {
+            when (keyCode) {
+                KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_DPAD_DOWN -> {
+                    hideOverlay()
+                    return true
+                }
+                // Let other keys be handled by the RecyclerView for navigation
+                else -> return super.onKeyDown(keyCode, event)
+            }
+        }
+
+        // Handle normal video player controls when overlay is not visible
         when (keyCode) {
+            KeyEvent.KEYCODE_DPAD_UP -> {
+                toggleOverlay()
+                return true
+            }
             KeyEvent.KEYCODE_MEDIA_FAST_FORWARD, KeyEvent.KEYCODE_DPAD_RIGHT -> {
                 skipForward()
                 return true
@@ -163,12 +250,12 @@ class VideoPlayerActivity : FragmentActivity() {
         }
         return super.onKeyDown(keyCode, event)
     }
-    
+
     private fun showSkipDurationDialog() {
         val input = EditText(this)
         input.setText(skipDuration.toString())
         input.inputType = android.text.InputType.TYPE_CLASS_NUMBER
-        
+
         AlertDialog.Builder(this)
             .setTitle("Set Skip Duration")
             .setMessage("Enter skip duration in seconds")
