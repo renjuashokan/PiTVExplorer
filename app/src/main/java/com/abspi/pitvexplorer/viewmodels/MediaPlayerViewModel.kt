@@ -25,6 +25,7 @@ class MediaPlayerViewModel(private val serverAddress: String) : ViewModel() {
 
     val streamUrl: String?
         get() = _currentMedia.value?.path?.let {
+            // Use a cacheable stream URL
             "http://$serverAddress:8080/api/v1/stream/${Uri.encode(it)}"
         }
 
@@ -43,6 +44,7 @@ class MediaPlayerViewModel(private val serverAddress: String) : ViewModel() {
 
     fun nextVideo() {
         if (hasNext) {
+            _isLoading.value = true
             _currentIndex.value = (_currentIndex.value ?: 0) + 1
             updateCurrentMedia()
             prepareStream()
@@ -51,6 +53,7 @@ class MediaPlayerViewModel(private val serverAddress: String) : ViewModel() {
 
     fun previousVideo() {
         if (hasPrevious) {
+            _isLoading.value = true
             _currentIndex.value = (_currentIndex.value ?: 0) - 1
             updateCurrentMedia()
             prepareStream()
@@ -59,6 +62,7 @@ class MediaPlayerViewModel(private val serverAddress: String) : ViewModel() {
 
     fun playVideoAt(position: Int) {
         if (position >= 0 && position < (_playlist.value?.size ?: 0)) {
+            _isLoading.value = true
             _currentIndex.value = position
             updateCurrentMedia()
             prepareStream()
@@ -80,8 +84,8 @@ class MediaPlayerViewModel(private val serverAddress: String) : ViewModel() {
         _isLoading.value = true
         _error.value = null
 
-        // The streamUrl property now handles URL construction
-        _isLoading.value = false
+        // We'll let the player handle the actual loading state
+        // This will be managed through player events
     }
 
     fun setError(error: String) {

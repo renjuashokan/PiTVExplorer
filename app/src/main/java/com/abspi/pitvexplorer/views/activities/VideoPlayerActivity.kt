@@ -20,6 +20,7 @@ import com.abspi.pitvexplorer.adapters.VideoListAdapter
 import com.abspi.pitvexplorer.models.MediaItem
 import com.abspi.pitvexplorer.viewmodels.MediaPlayerViewModel
 import com.abspi.pitvexplorer.viewmodels.MediaPlayerViewModelFactory
+import com.google.android.exoplayer2.C
 import com.google.android.exoplayer2.ExoPlayer
 import com.google.android.exoplayer2.MediaItem as ExoMediaItem
 import com.google.android.exoplayer2.Player
@@ -38,6 +39,9 @@ class VideoPlayerActivity : FragmentActivity() {
     private var player: ExoPlayer? = null
     private var skipDuration: Int = 15 // Default skip duration in seconds
     private var isOverlayVisible = false
+    private var playWhenReady = true
+    private var currentPosition = 0L
+    private var currentMediaItemIndex = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -77,9 +81,6 @@ class VideoPlayerActivity : FragmentActivity() {
         // Set up observers
         setupObservers()
 
-        // Set up player
-        initializePlayer()
-
         // Request focus for player view
         playerView.requestFocus()
     }
@@ -101,10 +102,26 @@ class VideoPlayerActivity : FragmentActivity() {
     private fun setupObservers() {
         // Observe current media
         viewModel.currentMedia.observe(this) { mediaItem ->
-            playerView.player?.let { player ->
-                player.setMediaItem(ExoMediaItem.fromUri(Uri.parse(viewModel.streamUrl)))
-                player.prepare()
-                player.playWhenReady = true
+            mediaItem?.let {
+                // Clear any previous media
+                player?.let { exoPlayer ->
+                    exoPlayer.stop()
+                    exoPlayer.clearMediaItems()
+
+                    // Set new media
+                    val mediaUri = Uri.parse(viewModel.streamUrl)
+                    val exoMediaItem = ExoMediaItem.Builder()
+                        .setUri(mediaUri)
+                        .setMediaId(it.path)
+                        .build()
+
+                    exoPlayer.setMediaItem(exoMediaItem)
+                    exoPlayer.prepare()
+                    exoPlayer.playWhenReady = true
+
+                    // Show loading indicator
+                    loadingIndicator.visibility = View.VISIBLE
+                }
             }
 
             // Update selected item in the video list
@@ -132,11 +149,26 @@ class VideoPlayerActivity : FragmentActivity() {
         player = ExoPlayer.Builder(this)
             .build()
             .also { exoPlayer ->
+                // Set seek increments after player creation
+                exoPlayer.setSeekParameters(com.google.android.exoplayer2.SeekParameters.EXACT)
+
+                // Set the player on the view
                 playerView.player = exoPlayer
+
+                // Add controller customization
+                playerView.setShowNextButton(true)
+                playerView.setShowPreviousButton(true)
+                playerView.setShowFastForwardButton(true)
+                playerView.setShowRewindButton(true)
 
                 // Set up player listener
                 exoPlayer.addListener(object : Player.Listener {
                     override fun onPlaybackStateChanged(state: Int) {
+                        // Hide loading indicator when playback starts
+                        if (state == Player.STATE_READY) {
+                            loadingIndicator.visibility = View.GONE
+                        }
+
                         if (state == Player.STATE_ENDED) {
                             // Auto-advance to next video when current one ends
                             if (viewModel.hasNext) {
@@ -144,19 +176,33 @@ class VideoPlayerActivity : FragmentActivity() {
                             }
                         }
                     }
+
+                    override fun onIsPlayingChanged(isPlaying: Boolean) {
+                        if (isPlaying) {
+                            loadingIndicator.visibility = View.GONE
+                        }
+                    }
                 })
+
+                // Restore state
+                exoPlayer.playWhenReady = playWhenReady
+                exoPlayer.seekTo(currentMediaItemIndex, currentPosition)
 
                 // Set initial media if available
                 viewModel.streamUrl?.let { url ->
-                    exoPlayer.setMediaItem(ExoMediaItem.fromUri(Uri.parse(url)))
+                    val mediaUri = Uri.parse(url)
+                    val mediaItem = ExoMediaItem.Builder()
+                        .setUri(mediaUri)
+                        .build()
+                    exoPlayer.setMediaItem(mediaItem)
                     exoPlayer.prepare()
-                    exoPlayer.playWhenReady = true
                 }
             }
     }
 
     private fun skipForward() {
         player?.let {
+            // Manually seek forward by the skip duration
             val newPosition = it.currentPosition + (skipDuration * 1000)
             it.seekTo(newPosition)
         }
@@ -164,6 +210,7 @@ class VideoPlayerActivity : FragmentActivity() {
 
     private fun skipBackward() {
         player?.let {
+            // Manually seek backward by the skip duration
             val newPosition = it.currentPosition - (skipDuration * 1000)
             it.seekTo(Math.max(0, newPosition))
         }
@@ -219,6 +266,12 @@ class VideoPlayerActivity : FragmentActivity() {
 
         // Handle normal video player controls when overlay is not visible
         when (keyCode) {
+            KeyEvent.KEYCODE_BACK -> {
+                // Properly cleanup and finish activity
+                releasePlayer()
+                finish()
+                return true
+            }
             KeyEvent.KEYCODE_DPAD_UP -> {
                 toggleOverlay()
                 return true
@@ -262,7 +315,12 @@ class VideoPlayerActivity : FragmentActivity() {
             .setView(input)
             .setPositiveButton("OK") { _, _ ->
                 try {
-                    skipDuration = input.text.toString().toInt()
+                    val newDuration = input.text.toString().toInt()
+                    skipDuration = newDuration
+
+                    // The skip duration is used directly in the skipForward() and skipBackward() methods
+                    // No need to update ExoPlayer settings here since we're using manual seeking
+
                 } catch (e: Exception) {
                     Toast.makeText(this, "Invalid input", Toast.LENGTH_SHORT).show()
                 }
@@ -290,6 +348,7 @@ class VideoPlayerActivity : FragmentActivity() {
     override fun onPause() {
         super.onPause()
         if (Util.SDK_INT < 24) {
+            savePlayerState()
             releasePlayer()
         }
     }
@@ -297,14 +356,34 @@ class VideoPlayerActivity : FragmentActivity() {
     override fun onStop() {
         super.onStop()
         if (Util.SDK_INT >= 24) {
+            savePlayerState()
             releasePlayer()
+        }
+    }
+
+    private fun savePlayerState() {
+        player?.let { exoPlayer ->
+            playWhenReady = exoPlayer.playWhenReady
+            currentPosition = exoPlayer.currentPosition
+            currentMediaItemIndex = exoPlayer.currentMediaItemIndex
         }
     }
 
     private fun releasePlayer() {
         player?.let { exoPlayer ->
+            // Make sure to pause playback before releasing
+            exoPlayer.playWhenReady = false
+            exoPlayer.pause()
+            exoPlayer.stop()
+            exoPlayer.clearMediaItems()
             exoPlayer.release()
         }
         player = null
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        // Make absolutely sure the player is released
+        releasePlayer()
     }
 }
