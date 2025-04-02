@@ -4,6 +4,7 @@ import android.content.Intent
 import android.os.Bundle
 import android.view.KeyEvent
 import android.view.View
+import android.view.inputmethod.InputMethodManager
 import android.widget.Button
 import android.widget.EditText
 import android.widget.ProgressBar
@@ -43,10 +44,13 @@ class LoginActivity : FragmentActivity() {
         // Load saved server IP if available
         viewModel.getLastServerIp()?.let { savedIp ->
             serverIpEditText.setText(savedIp)
+            // Optionally select all text so user can easily replace it
+            serverIpEditText.selectAll()
         }
 
         // Setup button click listener
         loginButton.setOnClickListener {
+            hideKeyboard()
             connectToServer()
         }
 
@@ -57,6 +61,32 @@ class LoginActivity : FragmentActivity() {
                 return@setOnKeyListener true
             }
             false
+        }
+
+        // Handle keyboard Enter key press
+        serverIpEditText.setOnEditorActionListener { _, actionId, event ->
+            if (event != null && event.keyCode == KeyEvent.KEYCODE_ENTER ||
+                event != null && event.keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER) {
+                // Hide keyboard
+                val imm = getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager
+                imm.hideSoftInputFromWindow(serverIpEditText.windowToken, 0)
+                // Connect to server
+                connectToServer()
+                return@setOnEditorActionListener true
+            }
+            false
+        }
+
+        // Explicitly request focus and show keyboard when the EditText is clicked
+        serverIpEditText.setOnClickListener {
+            it.requestFocus()
+            showKeyboard(it)
+        }
+
+        // Request focus on EditText and show keyboard when activity starts
+        serverIpEditText.post {
+            serverIpEditText.requestFocus()
+            showKeyboard(serverIpEditText)
         }
 
         // Observe loading state
@@ -73,7 +103,20 @@ class LoginActivity : FragmentActivity() {
         }
     }
 
+    private fun showKeyboard(view: View) {
+        val imm = getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager
+        imm.showSoftInput(view, InputMethodManager.SHOW_IMPLICIT)
+    }
+
+    private fun hideKeyboard() {
+        val imm = getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager
+        imm.hideSoftInputFromWindow(currentFocus?.windowToken, 0)
+    }
+
     private fun connectToServer() {
+        // Hide keyboard when connecting
+        hideKeyboard()
+
         val serverIp = serverIpEditText.text.toString().trim()
         if (serverIp.isEmpty()) {
             errorText.visibility = View.VISIBLE

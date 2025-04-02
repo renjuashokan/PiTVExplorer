@@ -16,21 +16,9 @@ class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Check for cached server IP
-        val preferenceManager = PreferenceManager(applicationContext)
-        val savedServerIp = preferenceManager.getLastServerIp()
-
-        if (savedServerIp != null) {
-            // If we have a cached server IP, try to go directly to file browser
-            val intent = Intent(this, FileBrowserActivity::class.java).apply {
-                putExtra("SERVER_IP", savedServerIp)
-            }
-            startActivity(intent)
-        } else {
-            // Otherwise, show the login screen
-            val intent = Intent(this, LoginActivity::class.java)
-            startActivity(intent)
-        }
+        // Always show the login screen - saved IP will be handled in LoginActivity
+        val intent = Intent(this, LoginActivity::class.java)
+        startActivity(intent)
 
         // Close MainActivity as we're redirecting
         finish()
