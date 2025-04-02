@@ -46,6 +46,9 @@ class FileBrowserViewModel(private val serverIp: String) : ViewModel() {
     private var isSearchMode = false
     private var searchQuery = ""
 
+    // Keep track of the parent directory from the server response
+    private var parentDirectory = ""
+
     private val client = OkHttpClient()
 
     fun fetchFiles(reset: Boolean = false) {
@@ -97,8 +100,24 @@ class FileBrowserViewModel(private val serverIp: String) : ViewModel() {
                             val filesArray = json.getJSONArray("files")
                             val filesList = mutableListOf<FileItem>()
 
+                            // Update parent directory if first page and has files
+                            if (currentPage == 0 && filesArray.length() > 0) {
+                                val firstFileJson = filesArray.getJSONObject(0)
+                                if (firstFileJson.has("parent_dir")) {
+                                    parentDirectory = firstFileJson.getString("parent_dir")
+                                    updatePathFromParentDir(parentDirectory)
+                                }
+                            }
+
                             for (i in 0 until filesArray.length()) {
                                 val fileJson = filesArray.getJSONObject(i)
+
+                                // Extract parentDir and relativePath if available
+                                val parentDir = if (fileJson.has("parent_dir"))
+                                    fileJson.getString("parent_dir") else ""
+                                val relPath = if (fileJson.has("rel_path"))
+                                    fileJson.getString("rel_path") else ""
+
                                 filesList.add(
                                     FileItem(
                                         name = fileJson.getString("name"),
@@ -108,7 +127,9 @@ class FileBrowserViewModel(private val serverIp: String) : ViewModel() {
                                         modifiedTime = Date(fileJson.getLong("modified_time")),
                                         owner = fileJson.getString("owner"),
                                         fileType = if (fileJson.has("file_type")) fileJson.getString("file_type") else null,
-                                        fullName = fileJson.getString("full_name")
+                                        fullName = fileJson.getString("full_name"),
+                                        parentDir = parentDir,
+                                        relativePath = relPath
                                     )
                                 )
                             }
@@ -134,6 +155,23 @@ class FileBrowserViewModel(private val serverIp: String) : ViewModel() {
         }
     }
 
+    private fun updatePathFromParentDir(parentDir: String) {
+        if (parentDir.isNotEmpty()) {
+            _currentPath.postValue(parentDir)
+            updatePathSegments(parentDir)
+        }
+    }
+
+    private fun updatePathSegments(path: String) {
+        if (path == ".") {
+            _pathSegments.postValue(listOf("\$"))
+        } else {
+            val segments = mutableListOf("\$")
+            segments.addAll(path.split("/").filter { it.isNotEmpty() })
+            _pathSegments.postValue(segments)
+        }
+    }
+
     fun getFileFullPath(fileName: String): String {
         val currentPath = _currentPath.value ?: "."
         return if (currentPath == "." || currentPath == "\$") {
@@ -143,10 +181,10 @@ class FileBrowserViewModel(private val serverIp: String) : ViewModel() {
         }
     }
 
-
     fun debugPaths() {
         Log.d("PathDebug", "Current path value: ${_currentPath.value}")
         Log.d("PathDebug", "Path segments: ${_pathSegments.value}")
+        Log.d("PathDebug", "Parent directory from server: $parentDirectory")
 
         // Check if current path matches what's displayed in the UI
         val segmentsWithoutRoot = _pathSegments.value?.filterIndexed { index, _ -> index > 0 } ?: listOf()
@@ -164,7 +202,7 @@ class FileBrowserViewModel(private val serverIp: String) : ViewModel() {
             "$path/$dirName"
         }
         _currentPath.value = normalizeServerPath(newPath)
-        updatePathSegments()
+        updatePathSegments(_currentPath.value ?: ".")
         fetchFiles(reset = true)
         debugPaths()
         Log.d("PathDebug", "Current path after: ${_currentPath.value}")
@@ -182,7 +220,7 @@ class FileBrowserViewModel(private val serverIp: String) : ViewModel() {
         } else {
             segments.dropLast(1).joinToString("/")
         }
-        updatePathSegments()
+        updatePathSegments(_currentPath.value ?: ".")
         fetchFiles(reset = true)
     }
 
@@ -193,7 +231,7 @@ class FileBrowserViewModel(private val serverIp: String) : ViewModel() {
         } else if (index < segments.size) {
             _currentPath.value = segments.subList(1, index + 1).joinToString("/")
         }
-        updatePathSegments()
+        updatePathSegments(_currentPath.value ?: ".")
         fetchFiles(reset = true)
     }
 
@@ -243,8 +281,24 @@ class FileBrowserViewModel(private val serverIp: String) : ViewModel() {
                             val filesArray = json.getJSONArray("files")
                             val filesList = mutableListOf<FileItem>()
 
+                            // Update parent directory if first page and has files
+                            if (currentPage == 0 && filesArray.length() > 0) {
+                                val firstFileJson = filesArray.getJSONObject(0)
+                                if (firstFileJson.has("parent_dir")) {
+                                    parentDirectory = firstFileJson.getString("parent_dir")
+                                    updatePathFromParentDir(parentDirectory)
+                                }
+                            }
+
                             for (i in 0 until filesArray.length()) {
                                 val fileJson = filesArray.getJSONObject(i)
+
+                                // Extract parentDir and relativePath if available
+                                val parentDir = if (fileJson.has("parent_dir"))
+                                    fileJson.getString("parent_dir") else ""
+                                val relPath = if (fileJson.has("rel_path"))
+                                    fileJson.getString("rel_path") else ""
+
                                 filesList.add(
                                     FileItem(
                                         name = fileJson.getString("name"),
@@ -254,7 +308,9 @@ class FileBrowserViewModel(private val serverIp: String) : ViewModel() {
                                         modifiedTime = Date(fileJson.getLong("modified_time")),
                                         owner = fileJson.getString("owner"),
                                         fileType = if (fileJson.has("file_type")) fileJson.getString("file_type") else null,
-                                        fullName = fileJson.getString("full_name")
+                                        fullName = fileJson.getString("full_name"),
+                                        parentDir = parentDir,
+                                        relativePath = relPath
                                     )
                                 )
                             }
@@ -277,17 +333,6 @@ class FileBrowserViewModel(private val serverIp: String) : ViewModel() {
         val newMode = if (_viewMode.value == ViewMode.ALL) ViewMode.VIDEOS_ONLY else ViewMode.ALL
         _viewMode.value = newMode
         fetchFiles(reset = true)
-    }
-
-    private fun updatePathSegments() {
-        val path = _currentPath.value ?: "."
-        if (path == ".") {
-            _pathSegments.value = listOf("\$")
-        } else {
-            val segments = mutableListOf("\$")
-            segments.addAll(path.split("/").filter { it.isNotEmpty() })
-            _pathSegments.value = segments
-        }
     }
 
     fun normalizeServerPath(path: String): String {
@@ -332,7 +377,7 @@ class FileBrowserViewModel(private val serverIp: String) : ViewModel() {
 
     fun getThumbnailUrl(file: FileItem): String {
         // Get the full path by combining current path with file name
-        val fullPath = getFileFullPath(file.name)
+        val fullPath = getFileFullPath(file.fullName)
         val normalizedPath = normalizeServerPath(fullPath)
         val baseUrl = "http://$serverIp:8080/api/v1"
 

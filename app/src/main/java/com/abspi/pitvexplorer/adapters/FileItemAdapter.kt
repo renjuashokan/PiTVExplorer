@@ -11,6 +11,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.abspi.pitvexplorer.R
 import com.abspi.pitvexplorer.models.FileItem
 import com.abspi.pitvexplorer.viewmodels.FileBrowserViewModel
+import com.abspi.pitvexplorer.viewmodels.ViewMode
 import com.bumptech.glide.Glide
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -48,6 +49,10 @@ class FileItemAdapter(
         private val nameView: TextView = itemView.findViewById(R.id.textViewFileName)
         private val infoView: TextView = itemView.findViewById(R.id.textViewFileInfo)
 
+        private fun getThumbnailUrl(fileItem: FileItem): String {
+            return viewModel.getThumbnailUrl(fileItem)
+        }
+
         init {
             itemView.setOnClickListener {
                 val position = adapterPosition
@@ -55,10 +60,28 @@ class FileItemAdapter(
                     listener.onFileItemClick(fileItems[position])
                 }
             }
+
+            // Make item focusable for TV navigation
+            itemView.isFocusable = true
+            itemView.isFocusableInTouchMode = true
+
+            // Set focus change listener for visual feedback
+            itemView.setOnFocusChangeListener { view, hasFocus ->
+                view.isSelected = hasFocus
+                // Add a subtle scale animation when focused
+                view.animate()
+                    .scaleX(if (hasFocus) 1.05f else 1.0f)
+                    .scaleY(if (hasFocus) 1.05f else 1.0f)
+                    .setDuration(150)
+                    .start()
+            }
         }
 
         fun bind(fileItem: FileItem) {
-            nameView.text = fileItem.name
+            // Use full_name for display if in videos-only mode, otherwise use name
+            val isVideosMode = viewModel.viewMode.value == ViewMode.VIDEOS_ONLY
+            val displayName = if (isVideosMode && fileItem.fullName.isNotEmpty()) fileItem.fullName else fileItem.name
+            nameView.text = displayName
 
             // Format date as MM/dd/yy
             val dateFormat = SimpleDateFormat("M/d/yy", Locale.US)
@@ -76,20 +99,22 @@ class FileItemAdapter(
             if (fileItem.isDirectory) {
                 iconView.setImageResource(R.drawable.ic_folder)
             } else if (isPicture(fileItem.name)) {
-                // Load thumbnail for images
+                // Load thumbnail for images with error handling
                 val thumbnailUrl = getThumbnailUrl(fileItem)
                 Glide.with(context)
                     .load(thumbnailUrl)
                     .placeholder(R.drawable.ic_image)
                     .error(R.drawable.ic_image)
+                    .timeout(3000) // 3 second timeout
                     .into(iconView)
             } else if (isVideo(fileItem.name)) {
-                // Load thumbnail for videos
+                // Load thumbnail for videos with error handling
                 val thumbnailUrl = getThumbnailUrl(fileItem)
                 Glide.with(context)
                     .load(thumbnailUrl)
                     .placeholder(R.drawable.ic_video)
                     .error(R.drawable.ic_video)
+                    .timeout(3000) // 3 second timeout
                     .into(iconView)
             } else {
                 iconView.setImageResource(R.drawable.ic_file)
@@ -115,10 +140,6 @@ class FileItemAdapter(
 
         private fun isVideo(filename: String): Boolean {
             return viewModel.isVideo(filename)
-        }
-
-    private fun getThumbnailUrl(fileItem: FileItem): String {
-                return viewModel.getThumbnailUrl(fileItem)
         }
     }
 }

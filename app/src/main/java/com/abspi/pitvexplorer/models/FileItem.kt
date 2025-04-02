@@ -10,7 +10,9 @@ data class FileItem(
     val modifiedTime: Date,
     val owner: String,
     val fileType: String?,
-    val fullName: String
+    val fullName: String,
+    val parentDir: String,
+    val relativePath: String,
 ) {
     companion object {
         fun fromJson(json: Map<String, Any>): FileItem {
@@ -22,7 +24,9 @@ data class FileItem(
                 modifiedTime = Date((json["modified_time"] as Long)),
                 owner = json["owner"] as String,
                 fileType = json["file_type"] as String?,
-                fullName = json["full_name"] as String
+                fullName = json["full_name"] as String,
+                parentDir = json["parent_dir"] as String,
+                relativePath = json["rel_path"] as String,
             )
         }
     }

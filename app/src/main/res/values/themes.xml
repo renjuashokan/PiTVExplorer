@@ -5,12 +5,12 @@
         <item name="android:windowBackground">@color/black</item>
         <item name="defaultBrandColor">@color/pi_view_red</item>
         <item name="defaultSearchColor">@color/pi_view_red</item>
-        
+
         <!-- Add these compatible attributes -->
         <item name="browseTitleTextStyle">@style/Widget.Leanback.Title.Text</item>
         <item name="searchOrbViewStyle">@style/CustomSearchOrbView</item>
     </style>
-    
+
     <!-- Fullscreen theme for the VideoPlayerActivity -->
     <style name="Theme.PiTVExplorer.Fullscreen" parent="Theme.PiTVExplorer">
         <item name="android:windowFullscreen">true</item>
@@ -19,23 +19,23 @@
         <item name="android:windowActionBar">false</item>
         <item name="android:windowNoTitle">true</item>
     </style>
-    
+
     <!-- Custom search orb style with your pi_view_red color -->
     <style name="CustomSearchOrbView" parent="Widget.Leanback.SearchOrbViewStyle">
         <item name="searchOrbColor">@color/pi_view_red</item>
         <item name="searchOrbIconColor">@color/white</item>
     </style>
-    
+
     <!-- Add additional styles for text, buttons, etc. -->
     <style name="PiTVText">
         <item name="android:textColor">@color/white</item>
     </style>
-    
+
     <style name="PiTVText.Title">
         <item name="android:textSize">24sp</item>
         <item name="android:textStyle">bold</item>
     </style>
-    
+
     <style name="PiTVText.Body">
         <item name="android:textSize">16sp</item>
     </style>
