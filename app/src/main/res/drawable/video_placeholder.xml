@@ -7,7 +7,7 @@
             <corners android:radius="4dp" />
         </shape>
     </item>
-    
+
     <!-- Play icon -->
     <item
         android:gravity="center"

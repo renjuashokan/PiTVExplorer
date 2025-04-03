@@ -4,6 +4,7 @@ import android.content.Intent
 import android.os.Bundle
 import android.view.KeyEvent
 import android.view.View
+import android.widget.Button
 import android.widget.TextView
 import android.widget.Toast
 import androidx.fragment.app.FragmentActivity
@@ -17,6 +18,7 @@ import com.abspi.pitvexplorer.models.MediaItem
 import com.abspi.pitvexplorer.utils.PreferenceManager
 import com.abspi.pitvexplorer.viewmodels.FileBrowserViewModel
 import com.abspi.pitvexplorer.viewmodels.FileBrowserViewModelFactory
+import com.abspi.pitvexplorer.viewmodels.ViewMode
 import com.abspi.pitvexplorer.R
 import java.util.ArrayList
 
@@ -30,6 +32,7 @@ class FileBrowserActivity : FragmentActivity() {
     private lateinit var errorMessage: TextView
     private lateinit var fileAdapter: FileItemAdapter
     private lateinit var serverIp: String
+    private lateinit var toggleModeButton: Button
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -48,6 +51,7 @@ class FileBrowserActivity : FragmentActivity() {
         itemCountText = findViewById(R.id.textViewItemCount)
         loadingIndicator = findViewById(R.id.progressLoading)
         errorMessage = findViewById(R.id.textViewError)
+        toggleModeButton = findViewById(R.id.buttonToggleMode)
 
         // Set up ViewModel
         val factory = FileBrowserViewModelFactory(serverIp)
@@ -55,6 +59,9 @@ class FileBrowserActivity : FragmentActivity() {
 
         // Initialize adapter and RecyclerView
         setupRecyclerView()
+
+        // Set up button to toggle between all files and videos-only
+        setupToggleButton()
 
         // Set up observers
         setupObservers()
@@ -65,34 +72,62 @@ class FileBrowserActivity : FragmentActivity() {
 
     private fun setupRecyclerView() {
         fileAdapter = FileItemAdapter(emptyList(),viewModel, object : FileItemAdapter.FileItemClickListener {
-        override fun onFileItemClick(fileItem: FileItem) {
-            if (fileItem.isDirectory) {
-                // Use file.name instead of file.fullName for directory navigation
-                viewModel.navigateToDirectory(fileItem.name)
-            } else {
-                if (viewModel.isVideo(fileItem.name)) {
-                    openVideoPlayer(fileItem)
-                } else if (viewModel.isPicture(fileItem.name)) {
-                    openImageViewer(fileItem)
+            override fun onFileItemClick(fileItem: FileItem) {
+                if (fileItem.isDirectory) {
+                    // Use file.name instead of file.fullName for directory navigation
+                    viewModel.navigateToDirectory(fileItem.name)
+                } else {
+                    if (viewModel.isVideo(fileItem.name)) {
+                        openVideoPlayer(fileItem)
+                    } else if (viewModel.isPicture(fileItem.name)) {
+                        openImageViewer(fileItem)
+                    }
                 }
             }
-        }
-    })
+        })
 
+        val gridLayoutManager = GridLayoutManager(this@FileBrowserActivity, 4)
         recyclerView.apply {
-            layoutManager = GridLayoutManager(this@FileBrowserActivity, 4)
+            layoutManager = gridLayoutManager
             adapter = fileAdapter
             setHasFixedSize(true)
 
-            // Handle pagination with scroll listener
+            // Enhanced scroll listener for pagination with buffer
             addOnScrollListener(object : RecyclerView.OnScrollListener() {
                 override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
                     super.onScrolled(recyclerView, dx, dy)
-                    if (!recyclerView.canScrollVertically(1)) {
+
+                    val visibleItemCount = gridLayoutManager.childCount
+                    val totalItemCount = gridLayoutManager.itemCount
+                    val firstVisibleItemPosition = gridLayoutManager.findFirstVisibleItemPosition()
+
+                    // Load more when approaching the end (with a buffer of 10 items)
+                    if ((visibleItemCount + firstVisibleItemPosition + 10 >= totalItemCount) && firstVisibleItemPosition >= 0) {
                         viewModel.loadNextPageIfNeeded()
                     }
                 }
             })
+        }
+    }
+
+    private fun setupToggleButton() {
+        // Set initial text based on current mode
+        updateToggleButtonText()
+
+        toggleModeButton.setOnClickListener {
+            viewModel.toggleViewMode()
+        }
+
+        // Make the button better for TV navigation
+        toggleModeButton.isFocusable = true
+        toggleModeButton.isFocusableInTouchMode = true
+    }
+
+    private fun updateToggleButtonText() {
+        toggleModeButton.text = if (viewModel.viewMode.value == ViewMode.ALL) {
+            "All Files"
+        } else {
+            "Videos Only"
         }
     }
 
@@ -105,6 +140,7 @@ class FileBrowserActivity : FragmentActivity() {
 
         // Observe current path
         viewModel.currentPath.observe(this) { path ->
+            viewModel.debugPaths() // Debug path state
             val segments = viewModel.pathSegments.value ?: listOf()
             val breadcrumb = segments.joinToString(" / ")
             pathBreadcrumb.text = breadcrumb
@@ -124,6 +160,11 @@ class FileBrowserActivity : FragmentActivity() {
                 errorMessage.visibility = View.GONE
             }
         }
+
+        // Observe view mode changes
+        viewModel.viewMode.observe(this) { mode ->
+            updateToggleButtonText()
+        }
     }
 
     private fun openVideoPlayer(fileItem: FileItem) {
@@ -135,7 +176,16 @@ class FileBrowserActivity : FragmentActivity() {
             // Create MediaItem list for the playlist
             val mediaItems = ArrayList<MediaItem>()
             videoFiles.forEach { file ->
-                val path = getCurrentFullPath(file.fullName)
+                val path = if (file.relativePath.isNotEmpty()) {
+                    // Use relativePath if available from server
+                    file.relativePath
+                } else if (viewModel.viewMode.value == ViewMode.VIDEOS_ONLY && file.fullName.isNotEmpty()) {
+                    // In videos-only mode, use the full name as the path
+                    file.fullName
+                } else {
+                    // Fallback to constructed path
+                    getCurrentFullPath(file.fullName)
+                }
                 mediaItems.add(MediaItem(name = file.fullName, path = path))
             }
 
@@ -167,8 +217,18 @@ class FileBrowserActivity : FragmentActivity() {
             // Create ImageItem list for the gallery
             val imageItems = ArrayList<ImageItem>()
             imageFiles.forEach { file ->
-                val fullPath = viewModel.getFileFullPath(file.fullName)
-                val normalizedPath = viewModel.normalizeServerPath(fullPath)
+                val imagePath = if (file.relativePath.isNotEmpty()) {
+                    // Use relativePath if available from server
+                    file.relativePath
+                } else if (viewModel.viewMode.value == ViewMode.VIDEOS_ONLY && file.fullName.isNotEmpty()) {
+                    // In videos-only mode, use the full name as the path
+                    file.fullName
+                } else {
+                    // Fallback to constructed path
+                    viewModel.getFileFullPath(file.fullName)
+                }
+
+                val normalizedPath = viewModel.normalizeServerPath(imagePath)
                 val imageUrl = "http://$serverIp:8080/api/v1/file/${normalizedPath}"
                 imageItems.add(ImageItem(name = file.fullName, path = imageUrl))
             }

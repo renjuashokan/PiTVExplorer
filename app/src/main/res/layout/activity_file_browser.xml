@@ -21,6 +21,20 @@
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintStart_toStartOf="parent" />
 
+    <Button
+        android:id="@+id/buttonToggleMode"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="All Files"
+        android:textColor="@color/white"
+        android:background="@drawable/button_background"
+        android:padding="8dp"
+        android:layout_marginEnd="24dp"
+        app:layout_constraintTop_toTopOf="@id/textViewTitle"
+        app:layout_constraintBottom_toBottomOf="@id/textViewTitle"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:focusable="true"/>
+
     <TextView
         android:id="@+id/textViewPath"
         android:layout_width="0dp"
