@@ -1,0 +1,72 @@
+name: Build Android Project
+
+on:
+  push:
+    branches:
+      - main
+      - try/*
+  pull_request:
+    branches:
+      - main
+
+env:
+  BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
+
+jobs:
+  common-vars:
+    name: Setup Build Variables
+    runs-on: ubuntu-latest
+    outputs:
+      artifact-name: ${{ steps.set-artifact-name.outputs.build-name }}.${{ github.run_number }}
+
+    steps:
+      - name: Set artifact name
+        id: set-artifact-name
+        run: |
+          # Clean branch name for artifact naming
+          CleanName="$(echo "$BRANCH_NAME" | sed -E 's/^(feat\/|try\/)//g' | sed -e 's/ /_/g' | sed -e 's/\//_/g')"
+          echo "Clean branch name is: $CleanName"
+          echo "build-name=$CleanName" >> "$GITHUB_OUTPUT"
+
+  android-build:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+    needs: common-vars
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Cache Gradle Dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x ./gradlew
+
+      - name: Build with Gradle
+        run: ./gradlew assembleRelease
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: PiTVExplorer-${{ needs.common-vars.outputs.artifact-name }}
+          path: app/build/outputs/apk/release/*.apk
