@@ -68,6 +68,12 @@ class FileItemAdapter(
             // Set focus change listener for visual feedback
             itemView.setOnFocusChangeListener { view, hasFocus ->
                 view.isSelected = hasFocus
+
+                if (hasFocus) {
+                    view.setBackgroundResource(R.drawable.selected_item_background)
+                } else {
+                    view.setBackgroundResource(android.R.color.transparent)
+                }
                 // Add a subtle scale animation when focused
                 view.animate()
                     .scaleX(if (hasFocus) 1.05f else 1.0f)

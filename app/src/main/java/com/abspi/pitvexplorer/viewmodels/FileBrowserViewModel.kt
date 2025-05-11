@@ -371,7 +371,10 @@ class FileBrowserViewModel(private val serverIp: String) : ViewModel() {
     fun isVideo(filename: String): Boolean {
         val lower = filename.lowercase(Locale.ROOT)
         return lower.endsWith(".mp4") || lower.endsWith(".avi") ||
-                lower.endsWith(".mkv")
+                lower.endsWith(".mkv") || lower.endsWith(".mov") ||
+                lower.endsWith(".wmv") || lower.endsWith(".flv") ||
+                lower.endsWith(".webm") || lower.endsWith(".mpeg") ||
+                lower.endsWith(".mpg") || lower.endsWith(".3gp")
     }
 
 
