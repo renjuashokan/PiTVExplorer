@@ -1,0 +1,256 @@
+name: Create PiTV Explorer Release from Tag
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+      - "v*.*.*-*"  # For pre-releases like v1.0.1-rc1
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  common-vars:
+    name: Setup Release Variables
+    runs-on: ubuntu-latest
+    outputs:
+      tag-name: ${{ github.ref_name }}
+      release-name: ${{ steps.set-release-name.outputs.release-name }}
+      is-prerelease: ${{ steps.check-prerelease.outputs.is-prerelease }}
+      latest-run-id: ${{ steps.get-latest-build.outputs.run-id }}
+
+    steps:
+    - name: Echo context data
+      run: |
+        echo "github.ref - ${{github.ref}}"
+        echo "github.ref_name - ${{github.ref_name}}"
+        echo "github.event_name - ${{github.event_name}}"
+
+    - name: Set release name
+      id: set-release-name
+      run: |
+        TAG_NAME="${{ github.ref_name }}"
+        RELEASE_NAME="PiTV Explorer ${TAG_NAME}"
+        echo "release-name=${RELEASE_NAME}" >> "$GITHUB_OUTPUT"
+        echo "Release name: ${RELEASE_NAME}"
+
+    - name: Check if prerelease
+      id: check-prerelease
+      run: |
+        TAG_NAME="${{ github.ref_name }}"
+        if [[ "$TAG_NAME" == *"-"* ]]; then
+          echo "is-prerelease=true" >> "$GITHUB_OUTPUT"
+          echo "This is a prerelease: $TAG_NAME"
+        else
+          echo "is-prerelease=false" >> "$GITHUB_OUTPUT"
+          echo "This is a stable release: $TAG_NAME"
+        fi
+
+    - name: Get latest successful build from main
+      id: get-latest-build
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const runs = await github.rest.actions.listWorkflowRuns({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            workflow_id: 'on-push-build-all.yml',
+            branch: 'main',
+            status: 'completed',
+            conclusion: 'success',
+            per_page: 1
+          });
+          
+          if (runs.data.workflow_runs.length === 0) {
+            core.setFailed('No successful builds found on main branch');
+            return;
+          }
+          
+          const latestRun = runs.data.workflow_runs[0];
+          console.log(`Latest successful run: ${latestRun.id} (${latestRun.head_sha})`);
+          core.setOutput('run-id', latestRun.id);
+          core.setOutput('commit-sha', latestRun.head_sha);
+
+  download-artifacts:
+    name: Download Latest APK Artifacts
+    needs: common-vars
+    runs-on: ubuntu-latest
+    env:
+      ARTIFACTS_DIR: ./artifacts
+      RELEASE_DIR: ./release
+
+    steps:
+    - name: Create artifact directories
+      run: |
+        mkdir -p ${{ env.ARTIFACTS_DIR }} ${{ env.RELEASE_DIR }}
+
+    - name: Download APK artifacts from latest main build
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          const path = require('path');
+          
+          // Get artifacts from the latest successful run
+          const artifacts = await github.rest.actions.listWorkflowRunArtifacts({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            run_id: ${{ needs.common-vars.outputs.latest-run-id }}
+          });
+          
+          console.log(`Found ${artifacts.data.artifacts.length} artifacts`);
+          
+          // Filter for PiTVExplorer artifacts
+          const apkArtifacts = artifacts.data.artifacts.filter(artifact => 
+            artifact.name.includes('PiTVExplorer')
+          );
+          
+          if (apkArtifacts.length === 0) {
+            core.setFailed('No PiTVExplorer artifacts found in the latest build');
+            return;
+          }
+          
+          for (const artifact of apkArtifacts) {
+            console.log(`Downloading artifact: ${artifact.name}`);
+            
+            const download = await github.rest.actions.downloadArtifact({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              artifact_id: artifact.id,
+              archive_format: 'zip'
+            });
+            
+            const artifactPath = path.join('${{ env.ARTIFACTS_DIR }}', `${artifact.name}.zip`);
+            fs.writeFileSync(artifactPath, Buffer.from(download.data));
+            console.log(`Saved to: ${artifactPath}`);
+          }
+
+    - name: Extract and prepare release assets
+      run: |
+        TAG_NAME="${{ needs.common-vars.outputs.tag-name }}"
+        
+        echo "Extracting artifacts..."
+        cd ${{ env.ARTIFACTS_DIR }}
+        
+        # Extract all downloaded zip files
+        for zip_file in *.zip; do
+          if [ -f "$zip_file" ]; then
+            echo "Extracting $zip_file"
+            unzip -q "$zip_file"
+            rm "$zip_file"
+          fi
+        done
+        
+        cd "${{ github.workspace }}"
+        
+        echo "Contents of artifacts directory:"
+        find ${{ env.ARTIFACTS_DIR }} -type f -exec ls -la {} \;
+        
+        # Rename APKs to include tag version and preserve original basename
+        echo "Preparing release assets..."
+        
+        for apk in ${{ env.ARTIFACTS_DIR }}/*.apk; do
+          if [ -f "$apk" ]; then
+            base=$(basename "$apk" .apk)
+            # Create a filename that preserves the original basename with tag version
+            new_filename="pitvexplorer-${base}-${TAG_NAME}.apk"
+            cp "$apk" "${{ env.RELEASE_DIR }}/${new_filename}"
+            echo "Prepared: ${new_filename}"
+          fi
+        done
+        
+        echo "Release assets prepared:"
+        ls -la ${{ env.RELEASE_DIR }}/
+
+    - name: Upload prepared release assets
+      uses: actions/upload-artifact@v4
+      with:
+        name: release-assets-${{ needs.common-vars.outputs.tag-name }}
+        path: ${{ env.RELEASE_DIR }}
+
+  create-release:
+    name: Create GitHub Release
+    needs: 
+      - common-vars
+      - download-artifacts
+    runs-on: ubuntu-latest
+    env:
+      RELEASE_DIR: ./release
+
+    steps:
+    - name: Download prepared release assets
+      uses: actions/download-artifact@v4
+      with:
+        name: release-assets-${{ needs.common-vars.outputs.tag-name }}
+        path: ${{ env.RELEASE_DIR }}
+
+    - name: Create Release Notes
+      run: |
+        TAG_NAME="${{ needs.common-vars.outputs.tag-name }}"
+        cat > ${{ env.RELEASE_DIR }}/RELEASE_NOTES.md << EOF
+        
+        This release contains the Android APK for PiTV Explorer, a native Android application for exploring and managing your Pi TV content.
+        
+        ## Installation
+        
+        ### Android APK
+        1. Download the \`pitvexplorer-*-${TAG_NAME}.apk\` file appropriate for your needs
+        2. Enable "Install from Unknown Sources" in your Android device settings:
+           - Go to Settings → Security → Unknown Sources (Android 7 and below)
+           - Go to Settings → Apps → Special Access → Install Unknown Apps (Android 8+)
+        3. Install the APK by tapping on the downloaded file
+        4. Launch PiTV Explorer from your app drawer
+        
+        ### Build Information
+        - Built with: Android SDK, Kotlin, Gradle
+        - Architecture: Universal APK (supports all Android architectures)
+        - Build Type: Release (optimized and signed)
+        
+        ## Troubleshooting
+        If you encounter installation issues:
+        1. Ensure you have sufficient storage space
+        2. Verify that "Install from Unknown Sources" is enabled
+        3. Try uninstalling any previous versions before installing
+        4. Check that your Android version meets the minimum requirements
+        
+        For app-specific issues, please create an issue in this repository.
+        
+        EOF
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v2
+      with:
+        name: ${{ needs.common-vars.outputs.release-name }}
+        tag_name: ${{ needs.common-vars.outputs.tag-name }}
+        body_path: ${{ env.RELEASE_DIR }}/RELEASE_NOTES.md
+        draft: false
+        prerelease: ${{ needs.common-vars.outputs.is-prerelease }}
+        files: |
+          ${{ env.RELEASE_DIR }}/pitvexplorer-*.apk
+        fail_on_unmatched_files: false
+
+    - name: Clean up temporary artifacts
+      uses: geekyeggo/delete-artifact@v5
+      with:
+        name: |
+          release-assets-${{ needs.common-vars.outputs.tag-name }}
+
+    - name: Release Summary
+      run: |
+        echo "## PiTV Explorer Release Created Successfully! 🎉" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Tag:** ${{ needs.common-vars.outputs.tag-name }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Release Name:** ${{ needs.common-vars.outputs.release-name }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Prerelease:** ${{ needs.common-vars.outputs.is-prerelease }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Source Build:** Run #${{ needs.common-vars.outputs.latest-run-id }} from main" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Assets:" >> $GITHUB_STEP_SUMMARY
+        for file in ${{ env.RELEASE_DIR }}/*; do
+          if [ -f "$file" ] && [[ "$file" != *"RELEASE_NOTES.md" ]]; then
+            filename=$(basename "$file")
+            size=$(ls -lh "$file" | awk '{print $5}')
+            echo "- $filename ($size)" >> $GITHUB_STEP_SUMMARY
+          fi
+        done
+        echo "" >> $GITHUB_STEP_SUMMARY
