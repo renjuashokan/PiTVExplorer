@@ -10,7 +10,6 @@ PiTV Explorer is an Android TV application that allows you to browse and access 
 - Video player with playback controls
 - TV remote-friendly navigation
 - Grid view for easy browsing on large screens
-- Automatic caching of server IP for future sessions
 
 
 ## Requirements
